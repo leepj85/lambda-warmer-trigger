@@ -23,7 +23,7 @@ public class Task {
         this.description = description;
         this.status = "available";
         this.historyList = new ArrayList<>();
-        historyList.add(historyCreation("available"));
+        historyList.add(historyCreation("Task is available"));
     }
 
     public Task(String title, String description, String assignee){
@@ -32,7 +32,7 @@ public class Task {
         this.status = "assigned";
         this.historyList= new ArrayList<>();
         this.assignee = assignee;
-        historyList.add(historyCreation("assigned"));
+        historyList.add(historyCreation("Task assigned to " + this.assignee));
     }
 
 

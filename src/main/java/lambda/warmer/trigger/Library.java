@@ -28,22 +28,24 @@ public class Library {
         if (task.getId() != null) {
             dbTask = ddbMapper.load(Task.class, task.getId());
             if (task.getAssignee() != null) {
-                dbTask.setAssignee(task.getAssignee());//do status change.
+                dbTask.setAssignee(task.getAssignee());
+            //do status change.
             } else if (task.getStatus() != null) {
                 String currentStatus = task.getStatus();
                 if(currentStatus.equals("available")){
                     currentStatus = "assigned";
-                    History history = new History("Task assigned to " + task.getAssignee());
+                    History history = new History("Task assigned to " + dbTask.getAssignee());
                     dbTask.addToHistory(history);
                 }else if(currentStatus.equals("assigned")){
                     currentStatus = "accepted";
-                    History history = new History("Task accepted by " + task.getAssignee());
+                    History history = new History("Task accepted by " + dbTask.getAssignee());
                     dbTask.addToHistory(history);
                 }else if(currentStatus.equals("accepted")){
                     currentStatus = "finished";
-                    History history = new History("Task finished by " + task.getAssignee());
+                    History history = new History("Task finished by " + dbTask.getAssignee());
                     dbTask.addToHistory(history);
                 }
+                dbTask.setStatus(currentStatus);
             }
         //new task record
         } else {
