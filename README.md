@@ -1,6 +1,7 @@
 # Lambda with Dynamo
 
 ## Link to Gateway
+??
 
 ## Issues Encountered
 * Set up took a while, there's a lot of convoluted steps with AWS. I wouldn't have progressed w/o the help of classmates.
