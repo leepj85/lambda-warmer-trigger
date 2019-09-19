@@ -3,6 +3,8 @@
  */
 package lambda.warmer.trigger;
 
+import com.amazonaws.services.dynamodbv2.model.ScanRequest;
+import com.amazonaws.services.dynamodbv2.model.ScanResult;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.LambdaLogger;
 import com.amazonaws.AmazonServiceException;
@@ -13,52 +15,81 @@ import com.amazonaws.services.dynamodbv2.document.DynamoDB;
 import com.amazonaws.services.dynamodbv2.datamodeling.*;
 import com.amazonaws.services.dynamodbv2.model.AttributeValue;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 public class Library {
 
     private DynamoDB dynamoDb;
     private String DYNAMODB_TABLE_NAME = "taskmaster";
     private Regions REGION = Regions.US_WEST_2;
+    final AmazonDynamoDB ddb = AmazonDynamoDBClientBuilder.defaultClient();
+    private DynamoDBMapper ddbMapper = new DynamoDBMapper(ddb);
 
-    public Task changeHandler(Task task) {
-        final AmazonDynamoDB ddb = AmazonDynamoDBClientBuilder.defaultClient();
-        DynamoDBMapper ddbMapper = new DynamoDBMapper(ddb);
+    public Task updateAssignee(Task task){
+        Task t = ddbMapper.load(Task.class, task.getId());
+        t.setAssignee(task.getAssignee());
+        t.setStatus("assigned");
+        t.addToHistory(new History("assigned"));
+        ddbMapper.save(t);
+        return t;
+    }
 
-        Task dbTask;
-        //existing task record
-        if (task.getId() != null) {
-            dbTask = ddbMapper.load(Task.class, task.getId());
-            if (task.getAssignee() != null) {
-                dbTask.setAssignee(task.getAssignee());
-            //do status change.
-            } else if (task.getStatus() != null) {
-                String currentStatus = task.getStatus();
-                if(currentStatus.equals("available")){
-                    currentStatus = "assigned";
-                    History history = new History("Task assigned to " + dbTask.getAssignee());
-                    dbTask.addToHistory(history);
-                }else if(currentStatus.equals("assigned")){
-                    currentStatus = "accepted";
-                    History history = new History("Task accepted by " + dbTask.getAssignee());
-                    dbTask.addToHistory(history);
-                }else if(currentStatus.equals("accepted")){
-                    currentStatus = "finished";
-                    History history = new History("Task finished by " + dbTask.getAssignee());
-                    dbTask.addToHistory(history);
-                }
-                dbTask.setStatus(currentStatus);
-            }
-        //new task record
-        } else {
-            // no assignee passed
-            if(task.getAssignee() == null) {
-                dbTask = new Task(task.getTitle(), task.getDescription());
-            //assignee included
-            } else {
-                dbTask = new Task(task.getTitle(), task.getDescription(), task.getAssignee());
-            }
+    public Task updateState(Task task){
+        Task t = ddbMapper.load(Task.class, task.getId());
+        if(t.getStatus().equals("available")){
+            t.setStatus("assigned");
+        } else if(t.getStatus().equals("assigned")){
+            t.setStatus("accepted");
+        } else if(t.getStatus().equals("accepted")){
+            t.setStatus("finished");
         }
-        ddbMapper.save(dbTask);
-        return dbTask;
+        t.addToHistory(new History(t.getStatus()));
+        ddbMapper.save(t);
+        return t;
+    }
+
+    public List<Task> getAllTasks() {
+        List<Task> tasks = ddbMapper.scan(Task.class, new DynamoDBScanExpression());
+        return tasks;
+    }
+
+    public List<Task> getUserTasks(Task task) {
+//        AmazonDynamoDB client = AmazonDynamoDBClientBuilder.standard().build();
+////        ScanRequest scanRequest = new ScanRequest().withTableName("taskmaster").withFilterExpression("assignee = " + task.getAssignee());
+////        ScanResult result = client.scan(scanRequest);
+
+        Map<String, AttributeValue> eav = new HashMap<String, AttributeValue>();
+        eav.put(":val1", new AttributeValue().withS(task.getAssignee()));
+
+        DynamoDBScanExpression scanExpression = new DynamoDBScanExpression()
+                .withFilterExpression("assignee = :val1").withExpressionAttributeValues(eav);
+
+        List<Task> scanResult = ddbMapper.scan(Task.class, scanExpression);
+
+        return scanResult;
+    }
+
+    public Task createTask(Task task){
+        Task t = new Task(task.getTitle(), task.getDescription(), task.getAssignee());
+        if(task.getAssignee() == null){
+            History history = new History("Task was created and is not assigned");
+            t.addToHistory(history);
+        } else {
+            t.setAssignee(task.getAssignee());
+            t.setStatus("assigned");
+            History history = new History("Task was created and assigned to " + task.getAssignee());
+            t.addToHistory(history);
+        }
+        ddbMapper.save(t);
+        return task;
+    }
+
+    public Task deleteTask(Task task) {
+        Task t = ddbMapper.load(Task.class, task.getId());
+        ddbMapper.delete(t);
+        return t;
     }
 
     public boolean someLibraryMethod() {
