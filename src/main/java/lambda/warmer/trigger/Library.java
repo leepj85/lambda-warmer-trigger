@@ -14,6 +14,9 @@ import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
 import com.amazonaws.services.dynamodbv2.document.DynamoDB;
 import com.amazonaws.services.dynamodbv2.datamodeling.*;
 import com.amazonaws.services.dynamodbv2.model.AttributeValue;
+import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
+import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
+import com.google.gson.Gson;
 
 import java.util.HashMap;
 import java.util.List;
@@ -27,17 +30,34 @@ public class Library {
     final AmazonDynamoDB ddb = AmazonDynamoDBClientBuilder.defaultClient();
     private DynamoDBMapper ddbMapper = new DynamoDBMapper(ddb);
 
-    public Task updateAssignee(Task task){
-        Task t = ddbMapper.load(Task.class, task.getId());
-        t.setAssignee(task.getAssignee());
+    public APIGatewayProxyResponseEvent updateAssignee(APIGatewayProxyRequestEvent event){
+        //convert path variables.
+        Map<String,String> urlParameterMap = event.getPathParameters();
+        String id = urlParameterMap.get("id");
+        String assignee = urlParameterMap.get("assignee");
+
+        Task t = ddbMapper.load(Task.class, id);
+        t.setAssignee(assignee);
         t.setStatus("assigned");
         t.addToHistory(new History("assigned"));
         ddbMapper.save(t);
-        return t;
+
+        Gson gson = new Gson();
+        String json = gson.toJson(t);
+
+        APIGatewayProxyResponseEvent res = new APIGatewayProxyResponseEvent();
+        res.setBody(json);
+
+        return res;
     }
 
-    public Task updateState(Task task){
-        Task t = ddbMapper.load(Task.class, task.getId());
+    public APIGatewayProxyResponseEvent updateState(APIGatewayProxyRequestEvent event){
+        //convert path variables.
+        Map<String,String> urlParameterMap = event.getPathParameters();
+        String id = urlParameterMap.get("id");
+
+        //query db for Task using id and change state.
+        Task t = ddbMapper.load(Task.class, id);
         if(t.getStatus().equals("available")){
             t.setStatus("assigned");
         } else if(t.getStatus().equals("assigned")){
@@ -47,28 +67,46 @@ public class Library {
         }
         t.addToHistory(new History(t.getStatus()));
         ddbMapper.save(t);
-        return t;
+
+        Gson gson = new Gson();
+        String json = gson.toJson(t);
+
+        APIGatewayProxyResponseEvent res = new APIGatewayProxyResponseEvent();
+        res.setBody(json);
+
+        return res;
     }
 
-    public List<Task> getAllTasks() {
+    public APIGatewayProxyResponseEvent getAllTasks() {
         List<Task> tasks = ddbMapper.scan(Task.class, new DynamoDBScanExpression());
-        return tasks;
+
+        Gson gson = new Gson();
+        String json = gson.toJson(tasks);
+        APIGatewayProxyResponseEvent res = new APIGatewayProxyResponseEvent();
+        res.setBody(json);
+        return res;
     }
 
-    public List<Task> getUserTasks(Task task) {
-//        AmazonDynamoDB client = AmazonDynamoDBClientBuilder.standard().build();
-////        ScanRequest scanRequest = new ScanRequest().withTableName("taskmaster").withFilterExpression("assignee = " + task.getAssignee());
-////        ScanResult result = client.scan(scanRequest);
+    public APIGatewayProxyResponseEvent getUserTasks(APIGatewayProxyRequestEvent event){
+        //convert path variables.
+        Map<String,String> urlParameterMap = event.getPathParameters();
 
-        Map<String, AttributeValue> eav = new HashMap<String, AttributeValue>();
-        eav.put(":val1", new AttributeValue().withS(task.getAssignee()));
-
+        String assignee = urlParameterMap.get("user");
+        //set up to query with specific filter for all tasks where assignee = user
+        HashMap<String, AttributeValue> eav = new HashMap<>();
+        eav.put(":v1", new AttributeValue().withS(assignee));
         DynamoDBScanExpression scanExpression = new DynamoDBScanExpression()
-                .withFilterExpression("assignee = :val1").withExpressionAttributeValues(eav);
+                .withFilterExpression("assignee = :v1").withExpressionAttributeValues((eav));
 
+        //Tasks returned from querying sent to db.
         List<Task> scanResult = ddbMapper.scan(Task.class, scanExpression);
 
-        return scanResult;
+        Gson gson = new Gson();
+        String json = gson.toJson(scanResult);
+
+        APIGatewayProxyResponseEvent res = new APIGatewayProxyResponseEvent();
+        res.setBody(json);
+        return res;
     }
 
     public Task createTask(Task task){
@@ -91,16 +129,5 @@ public class Library {
         ddbMapper.delete(t);
         return t;
     }
-
-    public boolean someLibraryMethod() {
-        return true;
-    }
-
-    public boolean logMe(Context context) {
-        LambdaLogger logger = context.getLogger();
-        logger.log("This has been logged: " + context.toString());
-        return true;
-    }
-
 
 }
