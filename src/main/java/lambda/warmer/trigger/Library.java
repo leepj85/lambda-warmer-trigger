@@ -16,6 +16,10 @@ import com.amazonaws.services.dynamodbv2.datamodeling.*;
 import com.amazonaws.services.dynamodbv2.model.AttributeValue;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
+import com.amazonaws.services.sns.AmazonSNS;
+import com.amazonaws.services.sns.AmazonSNSClient;
+import com.amazonaws.services.sns.model.PublishRequest;
+import com.amazonaws.services.sns.model.PublishResult;
 import com.google.gson.Gson;
 
 import java.util.HashMap;
@@ -27,8 +31,10 @@ public class Library {
     private DynamoDB dynamoDb;
     private String DYNAMODB_TABLE_NAME = "taskmaster";
     private Regions REGION = Regions.US_WEST_2;
-    final AmazonDynamoDB ddb = AmazonDynamoDBClientBuilder.defaultClient();
+    private final AmazonDynamoDB ddb = AmazonDynamoDBClientBuilder.defaultClient();
     private DynamoDBMapper ddbMapper = new DynamoDBMapper(ddb);
+    private String topicArn = "arn:aws:sns:us-west-2:525415951277:TaskComplete";
+    private AmazonSNS sns = AmazonSNSClient.builder().build();
 
     public APIGatewayProxyResponseEvent updateAssignee(APIGatewayProxyRequestEvent event){
         //convert path variables.
@@ -64,6 +70,15 @@ public class Library {
             t.setStatus("accepted");
         } else if(t.getStatus().equals("accepted")){
             t.setStatus("finished");
+
+            // Publish a message to an Amazon SNS topic.
+            final String msg = "Task: " + t.getTitle();
+            final PublishRequest publishRequest = new PublishRequest(topicArn, msg);
+            final PublishResult publishResponse = sns.publish(publishRequest);
+
+            // Print the MessageId of the message.
+            System.out.println("MessageId: " + publishResponse.getMessageId());
+
         }
         t.addToHistory(new History(t.getStatus()));
         ddbMapper.save(t);
