@@ -72,7 +72,7 @@ public class Library {
             t.setStatus("finished");
 
             // Publish a message to an Amazon SNS topic.
-            final String msg = "Task Completed!";
+            final String msg = "Task: " + t.getTitle();
             final PublishRequest publishRequest = new PublishRequest(topicArn, msg);
             final PublishResult publishResponse = sns.publish(publishRequest);
 
